@@ -1,0 +1,5 @@
+employee_name,employee_id,work_date,regular_hours,overtime_hours,project_code,client_name,work_location,pay_rate_(usd),approval_status
+John Miller,US-EMP-001,2024-01-12,8.0,0.0,PRJ-NY-01,Acme Corp,"New York, NY",42.5,Approved
+Sarah Johnson,US-EMP-002,2024-01-12,8.0,1.5,PRJ-CA-03,BuildRight,"San Jose, CA",48.0,Approved
+Michael Brown,US-EMP-003,2024-02-12,7.5,0.0,PRJ-TX-02,IronWorks,"Austin, TX",40.0,Pending
+Emily Davis,US-EMP-004,2024-02-12,8.0,2.0,PRJ-FL-04,Skyline LLC,"Miami, FL",45.75,Approved
