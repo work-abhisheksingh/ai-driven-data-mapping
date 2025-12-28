@@ -1,0 +1,112 @@
+/* Global App Background */
+.stApp {
+    background-color: #063f3b; /* Lumber Forest Green */
+    color: #ffffff;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Hide Streamlit Default Header and Padding */
+header, [data-testid="stHeader"], .stAppHeader, #stDecoration {
+    display: none !important;
+}
+
+.main .block-container {
+    padding-top: 0rem !important;
+    margin-top: -60px !important;
+    padding-left: 0rem !important;
+    padding-right: 0rem !important;
+}
+
+/* Lumber Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, #063f3b 0%, #0f766e 100%);
+    color: white;
+    padding: 6rem 2rem;
+    text-align: center;
+    border-bottom: 3px solid #5eead4; /* Signature Teal */
+    border-radius: 0 0 30px 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.hero-section h1 {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+
+.hero-section span {
+    color: #5eead4;
+}
+
+.hero-section p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+/* Data Cards */
+.data-card {
+    /* background-color: #1a1c24;
+    border-radius: 12px;
+    padding: 25px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #3e424b; */
+    height: auto; 
+    overflow: visible;
+}
+
+/* Metric (KPI) Styling */
+[data-testid="stMetricValue"] {
+    color: #5eead4 !important;
+    font-size: 2.8rem !important;
+    font-weight: 700 !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #ffffff;
+    opacity: 0.8;
+}
+
+/* Button Styling (Teal Background, Dark Text) */
+div.stButton > button {
+    background-color: #5eead4 !important;
+    color: #063f3b !important;
+    border: none !important;
+    padding: 0.75rem 2rem !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+    width: 100%;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+div.stButton > button:hover {
+    background-color: #ffffff !important;
+    color: #0f766e !important;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(94, 234, 212, 0.4);
+}
+
+/* Sidebar Styling (If used) */
+[data-testid="stSidebar"] {
+    background-color: #052e2b !important;
+}
+
+/* Selectbox and Input Styling */
+.stSelectbox div[data-baseweb="select"] {
+    background-color: #161b22 !important;
+    border-radius: 8px;
+}
+
+/* Dataframe Preview */
+[data-testid="stDataFrame"] {
+    background-color: #161b22;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* Horizontal Divider */
+hr {
+    border-color: #30363d !important;
+}

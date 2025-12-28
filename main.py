@@ -1,54 +1,40 @@
 import os
-import sys
-import json
-
-# --------------------------------------------------
-# ADD PROJECT ROOT TO PYTHON PATH (VERY IMPORTANT)
-# --------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
-
-# --------------------------------------------------
-# INTERNAL IMPORTS
-# --------------------------------------------------
-from core.file_reader import read_client_file
-from ai.prompt_builder import build_prompt
+import pandas as pd
 from ai.schema_matcher import apply_schema_mapping
 from ai.risk_engine import calculate_risk
 
-# --------------------------------------------------
-# MAIN ORCHESTRATOR
-# --------------------------------------------------
-def process_uploaded_file(uploaded_file, ai_response=None):
-    # 1. Read client file
-    df = read_client_file(uploaded_file)
+def process_uploaded_file(df, manual_mapping=None):
+    """
+    Processes the entire dataframe based on user-selected manual mappings.
+    This function ensures that the final output follows the 10-column 
+    canonical schema without any static or mock data.
+    """
+    
+    # 1. Capture the manual mapping provided by the UI dropdowns
+    if manual_mapping:
+        ai_response = manual_mapping
+    else:
+        # Fallback to empty mappings if none provided
+        ai_response = {"mappings": []}
 
-    # 2. Build AI prompt
-    prompt = build_prompt(list(df.columns))
-
-    # 3. DEMO MODE AI RESPONSE (replace with ChatGPT later)
-    if ai_response is None:
-        ai_response = {
-            "column_mapping": {},
-            "missing_fields": [],
-            "extra_fields": [],
-            "confidence_score": 0.0
-        }
-
-    # 4. Apply AI schema mapping
+    # 2. Transform the data
+    # The matcher uses the uploaded dataframe's index to process ALL rows
     canonical_df = apply_schema_mapping(df, ai_response)
 
-    # 5. Save canonical output
-    os.makedirs("data/canonical", exist_ok=True)
-    base = os.path.splitext(uploaded_file.name)[0]
-    canonical_path = f"data/canonical/canonical_{base}.csv"
-    canonical_df.to_csv(canonical_path, index=False)
+    # 3. Ensure the output directory exists
+    output_dir = "data/canonical"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 4. Save the full mapped dataset to a CSV file
+    path = os.path.join(output_dir, "lumber_final_export.csv")
+    canonical_df.to_csv(path, index=False)
 
-    # 6. Calculate risk
-    risk = calculate_risk(canonical_df)
+    # 5. Calculate data health metrics (Fill Rate and Risk Level)
+    risk_metrics = calculate_risk(canonical_df)
 
+    # 6. Return the path for download, metrics for UI, and the dataframe for preview
     return {
-        "canonical_path": canonical_path,
-        "risk": risk,
-        "prompt": prompt
+        "canonical_path": path,
+        "risk": risk_metrics,
+        "df": canonical_df
     }

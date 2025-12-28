@@ -1,261 +1,170 @@
 import streamlit as st
 import pandas as pd
-from io import StringIO
-import json
+import os
+import io
+from main import process_uploaded_file
+from ai.schema_matcher import get_ai_suggestions, apply_manual_logic
 
 # --------------------------------------------------
-# PAGE CONFIG
+# CONFIG & THEME LOADING
 # --------------------------------------------------
-st.set_page_config(
-    page_title="Lumber AI",
-    layout="wide"
-)
+st.set_page_config(page_title="Lumber AI | Mapping", page_icon="🏗️", layout="wide")
 
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
-if "step" not in st.session_state:
-    st.session_state.step = "hero"
+def load_css(file_name):
+    if os.path.exists(file_name):
+        with open(file_name) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-if "uploaded_file" not in st.session_state:
-    st.session_state.uploaded_file = None
+load_css("style.css")
 
-# --------------------------------------------------
-# GLOBAL STYLES
-# --------------------------------------------------
-st.markdown("""
-<style>
-html, body, .stApp {
-    background-color: #ffffff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
-}
-.hero {
-    height: 100vh;
-    background: linear-gradient(135deg, #063f3b 0%, #0f766e 45%, #5eead4 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-}
-.hero-content {
-    text-align: center;
-    max-width: 900px;
-}
-.badge {
-    padding: 6px 16px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.18);
-    font-weight: 600;
-    margin-bottom: 28px;
-    display: inline-block;
-}
-.hero h1 {
-    font-size: 56px;
-    font-weight: 900;
-}
-.hero h1 span {
-    color: #5eead4;
-}
-.hero p {
-    font-size: 18px;
-    opacity: 0.9;
-    margin: 24px 0 40px;
-}
-.container {
-    max-width: 1100px;
-    margin: auto;
-    padding: 60px 20px;
-}
-.card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    padding: 28px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-}
-.title {
-    font-size: 32px;
-    font-weight: 800;
-}
-.subtitle {
-    font-size: 16px;
-    color: #374151;
-    margin: 16px 0 30px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# --------------------------------------------------
-# CANONICAL SCHEMA
-# --------------------------------------------------
-CANONICAL_SCHEMA = [
-    "employee_id",
-    "employee_name",
-    "work_date",
-    "regular_hours",
-    "overtime_hours",
-    "project_code",
-    "client_name",
-    "work_location",
-    "pay_rate_usd",
-    "approval_status"
+LUMBER_SCHEMA = [
+    "employee_id", "employee_name", "work_date", "regular_hours", 
+    "overtime_hours", "project_code", "client_name", 
+    "work_location", "pay_rate_usd", "approval_status"
 ]
 
 # --------------------------------------------------
-# LLM-STYLE SCHEMA MAPPING (SIMULATED)
+# NAVIGATION HELPERS
 # --------------------------------------------------
-def llm_schema_mapping(client_columns):
-    mappings = []
-    for col in client_columns:
-        c = col.lower()
-        if "emp" in c or "id" in c:
-            mappings.append((col, "employee_id", 0.92))
-        elif "name" in c:
-            mappings.append((col, "employee_name", 0.90))
-        elif "date" in c:
-            mappings.append((col, "work_date", 0.88))
-        elif "hour" in c or "hrs" in c:
-            mappings.append((col, "regular_hours", 0.85))
-        elif "ot" in c:
-            mappings.append((col, "overtime_hours", 0.83))
-        elif "project" in c or "job" in c:
-            mappings.append((col, "project_code", 0.80))
-        else:
-            mappings.append((col, None, 0.0))
-    return mappings
+def move_to(step_name):
+    st.session_state.step = step_name
+    st.rerun()
 
-# ==================================================
-# HERO
-# ==================================================
+# --------------------------------------------------
+# STATE INITIALIZATION
+# --------------------------------------------------
+if "step" not in st.session_state:
+    st.session_state.step = "hero"
+if "client_df" not in st.session_state:
+    st.session_state.client_df = None
+if "final_result" not in st.session_state:
+    st.session_state.final_result = None
+if "ai_results" not in st.session_state:
+    st.session_state.ai_results = {}
+if "manual_results" not in st.session_state:
+    st.session_state.manual_results = {}
+
+# --------------------------------------------------
+# SCREENS
+# --------------------------------------------------
+
+# SCREEN 1: HERO
 if st.session_state.step == "hero":
-    st.markdown("""
-    <div class="hero">
-        <div class="hero-content">
-            <div class="badge">✨ AI-First Data Onboarding</div>
-            <h1>
-                Built for the <span>Back Office</span><br/>
-                Trusted by the <span>Crew</span>
-            </h1>
-            <p>
-                Convert arbitrary client timesheets into
-                Lumber-ready canonical data with AI-driven mapping.
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([3,1,3])
+    st.markdown('<div class="hero-section"><h1>Lumber AI <span>Mapping</span></h1><p>Intelligent Construction Payroll Alignment</p></div>', unsafe_allow_html=True)
+    _, col2, _ = st.columns([1, 1, 1])
     with col2:
-        if st.button("Get Started"):
-            st.session_state.step = "upload"
-            st.rerun()
+        st.write("")
+        if st.button("🚀 Start Onboarding", width="stretch"):
+            move_to("upload")
 
-# ==================================================
-# UPLOAD
-# ==================================================
+# SCREEN 2: UPLOAD
 elif st.session_state.step == "upload":
-    st.markdown('<div class="container"><div class="card">', unsafe_allow_html=True)
+    cols = st.columns([1, 8, 1])
+    with cols[0]:
+        if st.button("⬅️ Back"): move_to("hero")
+    
+    st.markdown('<div class="data-card">', unsafe_allow_html=True)
+    st.title("📁 Step 1: Upload File")
+    file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"], label_visibility="collapsed")
+    
+    if file:
+        if file.name.endswith('.csv'):
+            df = pd.read_csv(file, quotechar="'", skipinitialspace=True)
+        else:
+            df = pd.read_excel(file)
+            
+        st.session_state.client_df = df
+        st.session_state.ai_results = {} 
+        st.session_state.manual_results = {}
+        
+        st.success(f"Success! Detected **{len(df.columns)}** columns and **{len(df)}** rows.")
+        if st.button("Proceed to Mapping →", width="stretch"):
+            move_to("mapping")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="title">Client Data Upload</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="subtitle">'
-        'Upload any client Excel / CSV. '
-        'AI will map it to Lumber canonical schema.'
-        '</div>',
-        unsafe_allow_html=True
-    )
+# SCREEN 3: INTERACTIVE MAPPING
+elif st.session_state.step == "mapping":
+    cols = st.columns([1, 8, 1])
+    with cols[0]:
+        if st.button("⬅️ Back"): move_to("upload")
+        
+    st.markdown('<div class="data-card">', unsafe_allow_html=True)
+    st.title("🎯 Step 2: Configure Mapping")
+    
+    mode = st.radio("Choose Mapping Engine:", ["AI Suggestion (Gemini)", "Manual Heuristic (String Match)"], horizontal=True)
+    
+    df = st.session_state.client_df
+    client_cols = ["-- Skip / Null --"] + df.columns.tolist()
+    
+    if "AI Suggestion" in mode:
+        if not st.session_state.ai_results:
+            with st.spinner("AI is analyzing data patterns..."):
+                st.session_state.ai_results = get_ai_suggestions(df)
+        current_suggestions = st.session_state.ai_results
+    else:
+        if not st.session_state.manual_results:
+            st.session_state.manual_results = apply_manual_logic(df.columns.tolist())
+        current_suggestions = st.session_state.manual_results
 
-    uploaded = st.file_uploader("Upload client file", type=["xlsx", "csv"])
+    user_selections = {}
+    c1, c2 = st.columns(2)
+    for i, field in enumerate(LUMBER_SCHEMA):
+        with (c1 if i % 2 == 0 else c2):
+            suggested_col = current_suggestions.get(field)
+            try:
+                idx = client_cols.index(suggested_col) if suggested_col in client_cols else 0
+            except:
+                idx = 0
+            user_selections[field] = st.selectbox(f"Lumber Field: {field}", options=client_cols, index=idx, key=f"f_{field}_{mode}")
 
-    if uploaded:
-        st.session_state.uploaded_file = uploaded
-        st.success(f"Uploaded: {uploaded.name}")
+    st.divider()
+    if st.button("Confirm Mapping & Process File", width="stretch"):
+        with st.spinner("Processing full dataset..."):
+            mapping_payload = {"mappings": [{"source_column": src, "target_column": tgt} for tgt, src in user_selections.items() if src != "-- Skip / Null --"]}
+            res = process_uploaded_file(df, manual_mapping=mapping_payload)
+            st.session_state.final_result = res
+            move_to("analysis")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("Analyze & Map"):
-            st.session_state.step = "analysis"
-            st.rerun()
-
-    st.markdown('</div></div>', unsafe_allow_html=True)
-
-# ==================================================
-# ANALYSIS + CORRECTED FILE + REPORT
-# ==================================================
+# SCREEN 4: PREVIEW & EXPORT
 elif st.session_state.step == "analysis":
+    cols = st.columns([1, 8, 1])
+    with cols[0]:
+        if st.button("⬅️ Back"): move_to("mapping")
 
-    uploaded_file = st.session_state.uploaded_file
+    res = st.session_state.final_result
+    
+    # --- FIX: Create display version with S.No starting from 1 ---
+    df_display = res['df'].copy()
+    df_display.insert(0, 'S.No', range(1, len(df_display) + 1))
+    # ------------------------------------------------------------
 
-    # Read file
-    if uploaded_file.name.endswith(".xlsx"):
-        df = pd.read_excel(uploaded_file)
-    else:
-        df = pd.read_csv(uploaded_file)
+    st.markdown('<div class="data-card">', unsafe_allow_html=True)
+    st.title("📊 Step 3: Final Review")
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Risk Level", res['risk']['risk_level'])
+    m2.metric("Fill Rate", f"{100 - res['risk']['null_percentage']}%")
+    m3.metric("Processed Rows", len(res['df']))
 
-    # LLM mapping
-    mappings = llm_schema_mapping(df.columns)
+    st.write("### Mapped Data Preview")
+    # Display with S.No column and hide default pandas index
+    st.dataframe(df_display, width="stretch", hide_index=True)
 
-    # Build canonical DF
-    canonical_df = pd.DataFrame(columns=CANONICAL_SCHEMA)
-    mapping_report = []
+    st.divider()
+    col_ex, col_csv = st.columns(2)
+    with col_ex:
+        excel_buf = io.BytesIO()
+        with pd.ExcelWriter(excel_buf, engine='xlsxwriter') as writer:
+            # Excel mein S.No column jayega, index (0,1,2) nahi jayega
+            df_display.to_excel(writer, index=False)
+        st.download_button("⬇️ Excel", excel_buf.getvalue(), "mapped.xlsx", width="stretch")
+    with col_csv:
+        # CSV mein S.No column jayega, index (0,1,2) nahi jayega
+        csv_data = df_display.to_csv(index=False).encode('utf-8')
+        st.download_button("📑 CSV", csv_data, "mapped.csv", width="stretch")
 
-    for src, target, conf in mappings:
-        if target:
-            canonical_df[target] = df[src]
-        mapping_report.append({
-            "source_column": src,
-            "mapped_to": target,
-            "confidence": conf,
-            "status": "Mapped" if target else "Unmapped"
-        })
-
-    for col in CANONICAL_SCHEMA:
-        if col not in canonical_df.columns:
-            canonical_df[col] = None
-
-    # Risk
-    mapped = len([m for m in mapping_report if m["status"] == "Mapped"])
-    total = len(CANONICAL_SCHEMA)
-    risk_pct = mapped / total
-
-    st.markdown('<div class="container"><div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="title">AI Mapping & Risk Analysis</div>', unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Schema Match", f"{int(risk_pct*100)}%")
-    col2.metric("Mapped Fields", mapped)
-    col3.metric("Unmapped Fields", total - mapped)
-
-    st.progress(risk_pct)
-
-    if risk_pct > 0.8:
-        st.success("Low onboarding risk")
-    elif risk_pct > 0.5:
-        st.warning("Medium onboarding risk")
-    else:
-        st.error("High onboarding risk")
-
-    st.subheader("Schema Mapping Report")
-    st.dataframe(pd.DataFrame(mapping_report))
-
-    # Downloads
-    csv_buf = StringIO()
-    canonical_df.to_csv(csv_buf, index=False)
-
-    st.download_button(
-        "⬇ Download Corrected (Mapped) File",
-        csv_buf.getvalue(),
-        file_name="canonical_mapped.csv",
-        mime="text/csv"
-    )
-
-    st.download_button(
-        "⬇ Download Mapping Report (JSON)",
-        json.dumps(mapping_report, indent=2),
-        file_name="mapping_report.json",
-        mime="application/json"
-    )
-
-    if st.button("Upload Another File"):
-        st.session_state.step = "upload"
+    if st.button("🔄 Start New Mapping", width="stretch"):
+        st.session_state.clear() 
         st.rerun()
-
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)

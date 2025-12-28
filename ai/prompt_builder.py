@@ -1,29 +1,35 @@
-def build_schema_mapping_prompt(client_columns, canonical_columns):
-    return f"""
-You are a data schema expert.
+import google.generativeai as genai
+import json
 
-Your task is to map client data columns to Lumber's canonical schema.
+# Yahan apni Gemini API Key daalein
+genai.configure(api_key="YOUR_GEMINI_API_KEY")
 
-Client columns:
-{client_columns}
+def build_prompt(client_columns):
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    canonical_columns = [
+        "employee_id", "employee_name", "work_date", "regular_hours", 
+        "overtime_hours", "project_code", "client_name", 
+        "work_location", "pay_rate_usd", "approval_status"
+    ]
 
-Canonical schema:
-{canonical_columns}
+    prompt = f"""
+    You are a data mapping expert. Map these client headers to Lumber's canonical schema.
+    Client Headers: {client_columns}
+    Lumber Schema: {canonical_columns}
 
-Rules:
-- One client column can map to only one canonical column
-- If no suitable mapping exists, return null
-- Return confidence score (0 to 1)
-
-Return output strictly in JSON:
-
-{{
-  "mappings": [
+    Return ONLY a JSON object with this structure:
     {{
-      "source_column": "...",
-      "target_column": "...",
-      "confidence": 0.0
+      "mappings": [
+        {{"source_column": "actual_header", "target_column": "lumber_header", "confidence": 0.95}}
+      ]
     }}
-  ]
-}}
-"""
+    """
+    
+    response = model.generate_content(prompt)
+    # Safely parse JSON from response
+    try:
+        clean_json = response.text.replace('```json', '').replace('```', '').strip()
+        return json.loads(clean_json)
+    except:
+        return {"mappings": []}

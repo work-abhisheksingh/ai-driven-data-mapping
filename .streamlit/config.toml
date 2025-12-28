@@ -1,0 +1,7 @@
+[theme]
+primaryColor = "#5eead4"          # Lumber's signature teal/aqua
+backgroundColor = "#063f3b"       # Deep dark forest green background
+secondaryBackgroundColor = "#0e1117" # Darker gray for cards/inputs
+textColor = "#ffffff"             # Clean white text
+font = "sans serif"
+base = "dark"
