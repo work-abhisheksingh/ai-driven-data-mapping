@@ -110,3 +110,30 @@ div.stButton > button:hover {
 hr {
     border-color: #30363d !important;
 }
+
+/* Center align the S.No column text for a cleaner look */
+[data-testid="stDataFrame"] td:nth-child(1) {
+    text-align: center !important;
+    font-weight: bold;
+    color: #5eead4; /* Matching your Teal theme */
+}
+
+/* 1. Hide the default row number column (the gutter) */
+[data-testid="stTable"] th:first-child, 
+[data-testid="stTable"] td:first-child {
+    display: none !important;
+}
+
+/* 2. Style your manual S.No column to look like a fixed index */
+[data-testid="stDataFrame"] td:nth-child(1) {
+    background-color: #052e2b; /* Slightly darker teal for the S.No column */
+    font-weight: bold;
+    color: #5eead4;
+    text-align: center;
+}
+
+/* 3. Ensure the dataframe takes up the full card width */
+[data-testid="stDataFrame"] {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+}

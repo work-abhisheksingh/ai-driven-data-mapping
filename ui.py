@@ -2,8 +2,10 @@ import streamlit as st
 import pandas as pd
 import os
 import io
+import time  # Added for progress bar timing
 from main import process_uploaded_file
-from ai.schema_matcher import get_ai_suggestions, apply_manual_logic
+# Added save_to_memory to the imports
+from ai.schema_matcher import get_ai_suggestions, apply_manual_logic, save_to_memory
 
 # --------------------------------------------------
 # CONFIG & THEME LOADING
@@ -54,18 +56,18 @@ if st.session_state.step == "hero":
     _, col2, _ = st.columns([1, 1, 1])
     with col2:
         st.write("")
-        if st.button("🚀 Start Onboarding", width="stretch"):
+        if st.button("🚀 Start Onboarding", width="stretch", key="btn_start"):
             move_to("upload")
 
 # SCREEN 2: UPLOAD
 elif st.session_state.step == "upload":
     cols = st.columns([1, 8, 1])
     with cols[0]:
-        if st.button("⬅️ Back"): move_to("hero")
+        if st.button("⬅️ Back", key="back_hero"): move_to("hero")
     
     st.markdown('<div class="data-card">', unsafe_allow_html=True)
     st.title("📁 Step 1: Upload File")
-    file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"], label_visibility="collapsed")
+    file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"], label_visibility="collapsed", key="file_loader")
     
     if file:
         if file.name.endswith('.csv'):
@@ -78,7 +80,7 @@ elif st.session_state.step == "upload":
         st.session_state.manual_results = {}
         
         st.success(f"Success! Detected **{len(df.columns)}** columns and **{len(df)}** rows.")
-        if st.button("Proceed to Mapping →", width="stretch"):
+        if st.button("Proceed to Mapping →", width="stretch", key="btn_to_map"):
             move_to("mapping")
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -86,20 +88,33 @@ elif st.session_state.step == "upload":
 elif st.session_state.step == "mapping":
     cols = st.columns([1, 8, 1])
     with cols[0]:
-        if st.button("⬅️ Back"): move_to("upload")
+        if st.button("⬅️ Back", key="back_upload"): move_to("upload")
         
     st.markdown('<div class="data-card">', unsafe_allow_html=True)
     st.title("🎯 Step 2: Configure Mapping")
     
-    mode = st.radio("Choose Mapping Engine:", ["AI Suggestion (Gemini)", "Manual Heuristic (String Match)"], horizontal=True)
+    mode = st.radio("Choose Mapping Engine:", ["AI Suggestion (Gemini)", "Manual Heuristic (String Match)"], horizontal=True, key="engine_mode")
     
     df = st.session_state.client_df
     client_cols = ["-- Skip / Null --"] + df.columns.tolist()
     
     if "AI Suggestion" in mode:
         if not st.session_state.ai_results:
-            with st.spinner("AI is analyzing data patterns..."):
-                st.session_state.ai_results = get_ai_suggestions(df)
+            # PROGRESS BAR IMPLEMENTATION
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            for percent_complete in range(100):
+                time.sleep(0.01)
+                progress_bar.progress(percent_complete + 1)
+                if percent_complete == 20: status_text.text("🔍 Analyzing headers...")
+                if percent_complete == 50: status_text.text("🧠 Consulting Gemini AI...")
+                if percent_complete == 80: status_text.text("💾 Applying learned rules...")
+            
+            st.session_state.ai_results = get_ai_suggestions(df)
+            progress_bar.empty()
+            status_text.empty()
+            
         current_suggestions = st.session_state.ai_results
     else:
         if not st.session_state.manual_results:
@@ -111,15 +126,17 @@ elif st.session_state.step == "mapping":
     for i, field in enumerate(LUMBER_SCHEMA):
         with (c1 if i % 2 == 0 else c2):
             suggested_col = current_suggestions.get(field)
-            try:
-                idx = client_cols.index(suggested_col) if suggested_col in client_cols else 0
-            except:
-                idx = 0
+            idx = client_cols.index(suggested_col) if suggested_col in client_cols else 0
             user_selections[field] = st.selectbox(f"Lumber Field: {field}", options=client_cols, index=idx, key=f"f_{field}_{mode}")
 
     st.divider()
-    if st.button("Confirm Mapping & Process File", width="stretch"):
-        with st.spinner("Processing full dataset..."):
+    if st.button("Confirm Mapping & Process File", width="stretch", key="btn_process"):
+        with st.spinner("Learning preferences and processing dataset..."):
+            # SELF-LEARNING TRIGGER
+            for target, source in user_selections.items():
+                if source and source != "-- Skip / Null --":
+                    save_to_memory(source, target)
+
             mapping_payload = {"mappings": [{"source_column": src, "target_column": tgt} for tgt, src in user_selections.items() if src != "-- Skip / Null --"]}
             res = process_uploaded_file(df, manual_mapping=mapping_payload)
             st.session_state.final_result = res
@@ -130,14 +147,14 @@ elif st.session_state.step == "mapping":
 elif st.session_state.step == "analysis":
     cols = st.columns([1, 8, 1])
     with cols[0]:
-        if st.button("⬅️ Back"): move_to("mapping")
+        if st.button("⬅️ Back", key="back_mapping"): 
+            move_to("mapping")
 
     res = st.session_state.final_result
     
-    # --- FIX: Create display version with S.No starting from 1 ---
     df_display = res['df'].copy()
-    df_display.insert(0, 'S.No', range(1, len(df_display) + 1))
-    # ------------------------------------------------------------
+    if 'S.No' not in df_display.columns:
+        df_display.insert(0, 'S.No', range(1, len(df_display) + 1))
 
     st.markdown('<div class="data-card">', unsafe_allow_html=True)
     st.title("📊 Step 3: Final Review")
@@ -148,23 +165,30 @@ elif st.session_state.step == "analysis":
     m3.metric("Processed Rows", len(res['df']))
 
     st.write("### Mapped Data Preview")
-    # Display with S.No column and hide default pandas index
-    st.dataframe(df_display, width="stretch", hide_index=True)
+    
+    st.dataframe(
+        df_display, 
+        width="stretch", 
+        hide_index=True, 
+        use_container_width=True,
+        column_config={
+            "S.No": st.column_config.Column("S.No", width="small")
+        }
+    )
 
     st.divider()
     col_ex, col_csv = st.columns(2)
     with col_ex:
         excel_buf = io.BytesIO()
         with pd.ExcelWriter(excel_buf, engine='xlsxwriter') as writer:
-            # Excel mein S.No column jayega, index (0,1,2) nahi jayega
             df_display.to_excel(writer, index=False)
-        st.download_button("⬇️ Excel", excel_buf.getvalue(), "mapped.xlsx", width="stretch")
+        st.download_button("⬇️ Excel Export", excel_buf.getvalue(), "mapped.xlsx", width="stretch", key="dl_excel")
+        
     with col_csv:
-        # CSV mein S.No column jayega, index (0,1,2) nahi jayega
         csv_data = df_display.to_csv(index=False).encode('utf-8')
-        st.download_button("📑 CSV", csv_data, "mapped.csv", width="stretch")
+        st.download_button("📑 CSV Export", csv_data, "mapped.csv", width="stretch", key="dl_csv")
 
-    if st.button("🔄 Start New Mapping", width="stretch"):
+    if st.button("🔄 Start New Mapping", width="stretch", key="btn_reset"):
         st.session_state.clear() 
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
